@@ -54,18 +54,17 @@ const processMarkets = async (positions, markets) => {
     const firstHistoricPrice = historicPrices.prices[0];
     const lastHistoricPrice = historicPrices.prices[historicPrices.prices.length - 1];
 
-    console.log(util.inspect(historicPrices, false, null));
-
-    console.log('First Historic Price -: ', firstHistoricPrice);
-    console.log('Last Historic Price', lastHistoricPrice);
+    //console.log(util.inspect(historicPrices, false, null));
+    //console.log('First Historic Price -: ', firstHistoricPrice);
+    //console.log('Last Historic Price', lastHistoricPrice);
     //historicPrices.prices.forEach((price) => {
     //});
 
     //Lets try and dictate the direction that the market is going in - UP or DOWN???
-    let marketDirection = 0;
-    marketDirection = (((firstHistoricPrice.ask - firstHistoricPrice.bid) / 2) - ((lastHistoricPrice.ask - lastHistoricPrice.bid) / 2));
+    const marketDirection = (((firstHistoricPrice.closePrice.ask - firstHistoricPrice.closePrice.bid) / 2) - ((lastHistoricPrice.closePrice.ask - lastHistoricPrice.closePrice.bid) / 2));
+    console.log("Market Direction is -: ", marketDirection);
 
-    if (marketDirection > 0) {
+    if (marketDirection >= 0) {
       console.log("BUY  in -: ", market.epic);
       placePosition(market.epic, direction.buy);
     } else {
