@@ -1,0 +1,228 @@
+AWSTemplateFormatVersion: "2010-09-09"
+Description: A sample template to get a Lambda function invoked every 10 seconds using Step Functions
+                
+Parameters:
+  LambdaSize:
+    Type: Number
+    Default: 128
+    AllowedValues:
+      - 128
+      - 256
+      - 512
+      - 1024
+      - 2048
+    Description: Lambda iterator memory size (in MB)
+
+Resources:
+  BigMig:
+    Type: AWS::Lambda::Function
+    Properties:
+      FunctionName: BigMig
+      Code:
+        ZipFile: |
+          exports.handler = async (event, context) => {
+           console.log("We have been called....");
+          };
+      Runtime: nodejs8.10
+      Timeout: 5
+      MemorySize: 128
+      Environment:
+        Variables:
+          IG_API_KEY: 
+          IG_IDENTIFIER: 
+          IG_PASSWORD: 
+          IG_DEMO: TRUE 
+      Handler: index.handler
+      Role: !GetAtt BigMigExecutionRole.Arn
+
+  Iterator:
+    Type: AWS::Lambda::Function
+    Properties:
+      Code:
+        ZipFile: |
+            const aws = require('aws-sdk');
+            const client = new aws.Lambda({ region: 'eu-west-2' });   
+
+            exports.handler = (event, context, callback) => {
+              var params = {
+                FunctionName: "BigMig",
+                InvocationType: "RequestResponse",
+                LogType: "Tail",
+                };
+                
+              client.invoke(params, function (err, data) {
+                if (err) console.log(err, err.stack); // an error occurred
+                else console.log("Successful call : " + JSON.stringify(data));           // successful response
+                });
+                
+              let index = event.iterator.index;
+              let step = event.iterator.step;
+              let count = event.iterator.count;
+              
+              index += step;
+              
+              callback(null, {
+                index,
+                step,
+                count,
+                continue: index < count
+                });
+            };
+      Runtime: nodejs8.10
+      Timeout: 5
+      MemorySize: !Ref LambdaSize
+      Handler: index.handler
+      TracingConfig:
+        Mode: Active
+      Role: !GetAtt IteratorExecutionRole.Arn
+
+  BigMigExecutionRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - 
+            Effect: Allow
+            Principal:
+              Service: lambda.amazonaws.com
+            Action: sts:AssumeRole
+      Path: /
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole
+        - arn:aws:iam::aws:policy/AWSXrayWriteOnlyAccess
+
+  IteratorExecutionRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - 
+            Effect: Allow
+            Principal:
+              Service: lambda.amazonaws.com
+            Action: sts:AssumeRole
+      Path: /
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole
+        - arn:aws:iam::aws:policy/AWSXrayWriteOnlyAccess
+      Policies:
+        -
+          PolicyName: InvokeLambda
+          PolicyDocument: 
+            Version: "2012-10-17"
+            Statement: 
+              - 
+                Effect: Allow
+                Action: lambda:InvokeFunction
+                Resource: !GetAtt BigMig.Arn
+
+  StateMachine:
+    Type: AWS::StepFunctions::StateMachine
+    Properties:
+      StateMachineName: !Join ["", ["LambdaSubMinute", !Ref LambdaSize]]
+      DefinitionString: 
+        !Sub
+          - |-
+            {
+              "Comment": "Invoke Lambda every 1 second",
+              "StartAt": "ConfigureCount",
+              "States": {
+                "ConfigureCount": {
+                  "Type": "Pass",
+                  "Result": {
+                    "index": 0,
+                    "count": 60
+                  },
+                  "ResultPath": "$.iterator",
+                  "Next": "Iterator"
+                },
+                "Iterator": {
+                  "Type": "Task",
+                  "Resource": "${IteratorArn}",
+                  "ResultPath": "$.iterator",
+                  "Next": "IsCountReached"
+                },
+                "IsCountReached": {
+                  "Type": "Choice",
+                  "Choices": [
+                    {
+                      "Variable": "$.iterator.continue",
+                      "BooleanEquals": true,
+                      "Next": "Wait"
+                    }
+                  ],
+                  "Default": "Done"
+                },
+                "Wait": {
+                  "Type": "Wait",
+                  "Seconds": 30,
+                  "Next": "Iterator"
+                },
+                "Done": {
+                  "Type": "Pass",
+                  "End": true
+                }
+              }
+            }
+          -  {IteratorArn: !GetAtt Iterator.Arn}
+      RoleArn: !GetAtt StateMachineExecutionRole.Arn
+
+  StateMachineExecutionRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - 
+            Effect: Allow
+            Principal:
+              Service: !Join ["", ["states.", !Ref "AWS::Region", ".amazonaws.com"]]
+            Action: sts:AssumeRole
+      Path: /service-role/
+      Policies:
+        -
+          PolicyName: StepFunctionsInvokeLambda
+          PolicyDocument: 
+            Version: "2012-10-17"
+            Statement: 
+              - 
+                Effect: Allow
+                Action: lambda:InvokeFunction
+                Resource: !GetAtt Iterator.Arn
+
+  Cron:
+    Type: AWS::Events::Rule
+    Properties:
+      Description: Executes Step Functions every minute
+      ScheduleExpression: cron(* 8-17 ? * MON-FRI *)
+      State: ENABLED
+      Targets:
+        -
+          Arn: !Ref StateMachine
+          Id: !Join ["", ["LambdaSubMinute", !Ref LambdaSize]]
+          RoleArn: !GetAtt CronExecutionRole.Arn
+
+  CronExecutionRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - 
+            Effect: Allow
+            Principal:
+              Service: events.amazonaws.com
+            Action: sts:AssumeRole
+      Path: /service-role/
+      Policies:
+        -
+          PolicyName: CloudWatchEventsStartStepFunctions
+          PolicyDocument: 
+            Version: "2012-10-17"
+            Statement: 
+              - 
+                Effect: Allow
+                Action: states:StartExecution
+                Resource: !Ref StateMachine                

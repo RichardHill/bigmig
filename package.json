@@ -1,0 +1,24 @@
+{
+  "name": "bigmig",
+  "version": "1.0.0",
+  "description": "A trading bot that will achieve success by being sensible",
+  "main": "index.js",
+  "scripts": {
+    "dev": "node index.js",
+    "test": "npm run test"
+  },
+  "keywords": [
+    "trading",
+    "dax30",
+    "dax",
+    "short",
+    "long",
+    "bot"
+  ],
+  "author": "R.M.Hill",
+  "license": "ISC",
+  "devDependencies": {},
+  "dependencies": {
+    "node-ig-api": "^2.0.4"
+  }
+}
