@@ -10,16 +10,17 @@ const util = require('util');
 //4. Move the stop on a profitable position?
 //5. Is the market going up or down ? Buy or Sell?
 
-
-let markets = [{ epic: 'IX.D.DAX.DAILY.IP', PointShift: 20, Size: 1, invocationCount: 0, cumulativeTradeAmount: 0, rollingAverage: 0, openingPrice: 0 },
-{ epic: 'IX.D.FTSE.DAILY.IP', PointShift: 10, Size: 1, invocationCount: 0, cumulativeTradeAmount: 0, rollingAverage: 0, openingPrice: 0 },
-{ epic: 'IX.D.NIKKEI.DAILY.IP', PointShift: 30, Size: 1, invocationCount: 0, cumulativeTradeAmount: 0, rollingAverage: 0, openingPrice: 0 },
-{ epic: 'IX.D.DOW.DAILY.IP', PointShift: 30, Size: 1, invocationCount: 0, cumulativeTradeAmount: 0, rollingAverage: 0, openingPrice: 0 }];
+const markets = [{ epic: 'IX.D.DAX.DAILY.IP', stop: 50, size: 1, profit: 2, cumulativeTradeAmount: 0, rollingAverage: 0, openingPrice: 0 },
+{ epic: 'IX.D.FTSE.DAILY.IP', stop: 50, size: 1, profit: 2, cumulativeTradeAmount: 0, rollingAverage: 0, openingPrice: 0 },
+{ epic: 'IX.D.NIKKEI.DAILY.IP', stop: 100, size: 1, profit: 5, cumulativeTradeAmount: 0, rollingAverage: 0, openingPrice: 0 },
+{ epic: 'IX.D.DOW.DAILY.IP', stop: 100, size: 1, profit: 5, cumulativeTradeAmount: 0, rollingAverage: 0, openingPrice: 0 }];
 
 const direction = {
   buy: 'BUY',
   sell: 'SELL',
 };
+
+const dailyProfit = 50;
 
 let invocationCount = 0;
 
@@ -66,10 +67,10 @@ const processMarkets = async (positions, markets) => {
 
     if (marketDirection >= 0) {
       console.log("BUY  in -: ", market.epic);
-      placePosition(market.epic, direction.buy);
+      placePosition(market, direction.buy);
     } else {
       console.log("SELL in -: ", market.epic);
-      placePosition(market.epic, direction.sell);
+      placePosition(market, direction.sell);
     }
   });
 };
@@ -94,20 +95,42 @@ const processPositions = (positions) => {
   });
 };
 
-const placePosition = (epic, direction) => {
+const shouldWeTrade = async (profitTarget) => {
+  let profit = 0;
+  try {
+
+    const dateTimeNow = new Date().toJSON().slice(0, 10);
+    const from = dateTimeNow;
+    const to = dateTimeNow;
+
+    const results = await ig.acctTransaction('ALL', dateTimeNow, dateTimeNow, 500, 0);
+    results.transactions.forEach(transaction => {
+      profit += parseFloat(transaction.profitAndLoss.substring(1, transaction.profitAndLoss.length));
+    });
+  }
+  catch (error) {
+    console.log("Account Transactions returned an error ", error);
+  }
+
+  console.log("Current Profit for today is -:", profit);
+
+  return (profit >= profitTarget);
+}
+
+const placePosition = (market, direction) => {
 
   let ticket = {
     'currencyCode': 'GBP',
     'direction': direction,
-    'epic': epic,
+    'epic': market.epic,
     'expiry': 'DFB',
-    'size': 1,
+    'size': market.size,
     'forceOpen': true,
     'orderType': 'MARKET',
     'level': null,
-    'limitDistance': null,
+    'limitDistance': market.profit,
     'limitLevel': null,
-    'stopDistance': 60,
+    'stopDistance': market.stop,
     'stopLevel': null,
     'guaranteedStop': false,
     'timeInForce': 'FILL_OR_KILL',
@@ -132,12 +155,12 @@ module.exports.handler = async (event, context) => {
     //Get the first position from the response.
     const positions = positionsRepsonse.body.positions;
 
-    //Now lets process any existing positions (always first - we may be in profit!)
-    processPositions(positions);
-
-    //Do we have some positions?
-    processMarkets(positions, markets);
-
+    if (shouldWeTrade(dailyProfit)) {
+      processMarkets(positions, markets);
+    }
+    else {
+      console.log("Good news - profit for today has been reached... ceasing trading!");
+    }
     //Having performed our analysis we now log out - preparing the account for login later.
     ig.logout().then(r => console.log(util.inspect(r, false, null))).catch(e => console.log(e));
 
