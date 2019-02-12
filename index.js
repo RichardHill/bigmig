@@ -114,7 +114,12 @@ const shouldWeTrade = async (profitTarget) => {
 
   console.log("Current Profit for today is -:", profit);
 
-  return (profit >= profitTarget);
+  if (profit > profitTarget) {
+    return false;
+  } else {
+    return true;
+  }
+
 }
 
 const placePosition = (market, direction) => {
@@ -155,7 +160,7 @@ module.exports.handler = async (event, context) => {
     //Get the first position from the response.
     const positions = positionsRepsonse.body.positions;
 
-    if (shouldWeTrade(dailyProfit)) {
+    if (shouldWeTrade(dailyProfit) === false) {
       processMarkets(positions, markets);
     }
     else {
