@@ -18,8 +18,8 @@ To provision your AWS account you will need to follow these steps -: https://doc
     
 - npm install
 - Find node-ig-api folder.
-- In this folder open index.js and replace its contents with the contents of .api-re-write.js
-- Good to go.
+- Open index.js - replace its contents with the contents of .api-re-write.js
+- Open cloudformation.yml and update the values in lines 31-33 with you IG Trading Credentials.
 
 3. Deploy the stack -: aws cloudformation deploy --template-file cloudformation.yml --stack-name bigmig --capabilities CAPABILITY_IAM
 4. Create the Serverless deployment -: sls package
