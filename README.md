@@ -23,11 +23,13 @@ To provision your AWS account you will need to follow these steps -: https://doc
 
 3. Deploy the stack -: aws cloudformation deploy --template-file cloudformation.yml --stack-name bigmig --capabilities CAPABILITY_IAM
 4. Create the Serverless deployment -: sls package
-5. Deploy the Lambda ( go into the .serverless folder) -: aws lambda update - function- code--function-name BigMig--zip - file fileb://bigmig.zip
+5. Deploy the Lambda ( go into the .serverless folder) -: 
+
+   - aws lambda update -function-code --function-name BigMig --zip-file fileb://bigmig.zip
 
 To destroy the BOT from your account -: 
 
-    - aws cloudformation delete -stack--stack - name bigmig
+    - aws cloudformation delete-stack --stack-name bigmig
 
 You should now be trading! 
 
